@@ -1,10 +1,11 @@
 #include <REGX52.H>
-//#include<AT89x51.H>
+//#include <AT89x51.H>
 #include "stdio.h"
+#include <intrins.h>
 
 
-unsigned char receive_buff[50];
-
+unsigned char receive_buff[5];
+unsigned char stage_flag=0;
 
 void delay(unsigned int x){
 	unsigned char i;
@@ -14,22 +15,6 @@ void delay(unsigned int x){
 }
 
 
-// void send_char (unsigned char c){
-// 	SBUF=c;
-// 	while(TI==0);
-// 	TI=0;
-// }
-// 	unsigned char *s;
-// void send_str(unsigned char *k){
-// 	s=k;
-// 	while(*s != '\0'){
-// 		send_char(*s);
-// 		s++;
-// 		//delay(5);
-// 	}
-// 	s=NULL;
-// 	
-// }
 void send_str(unsigned char *s)
 {
 	ES=0;
@@ -61,24 +46,6 @@ void send_char(unsigned char c)
 		return;
 }
 
-// void PutString(unsigned char *TXStr)  
-// {                
-//     ES=0;     
-//      while(*TXStr!=0) 
-//     {                      
-//         SBUF=*TXStr;
-//         while(TI==0);
-//         TI=0;    
-//         TXStr++;
-//     }
-//     ES=1; 
-// }  
-//unsigned char * RecStr;
-//unsigned int count;  
-//unsigned char num=0;
-//
-
-
 
 /************************************************************************/
 		#define Imax 14000    //´Ë´¦Îª¾§ÕñÎª11.0592Ê±µÄÈ¡Öµ, 
@@ -96,12 +63,12 @@ void send_char(unsigned char c)
    
 /************************************************************************/	
 /************************************************************************/	
-//Íâ²¿ÖÐ¶Ï½âÂë³ÌÐò
-  void intersvr1(void) interrupt 2 using 1
+//Íâ²¿ÖÐ¶Ï1½âÂë³ÌÐò
+  void intersvr1(void) interrupt 2 using 1 //Íâ²¿ÖÐ¶Ï1
 {
-    Tc=TH0*256+TL0;                                               //ÌáÈ¡ÖÐ¶ÏÊ±¼ä¼ä¸ôÊ±³¤
-    TH0=0; 
-    TL0=0;              //¶¨Ê±ÖÐ¶ÏÖØÐÂÖÃÁã
+    Tc=TH1*256+TL1;                                               //ÌáÈ¡ÖÐ¶ÏÊ±¼ä¼ä¸ôÊ±³¤
+    TH1=0; 
+    TL1=0;              //¶¨Ê±ÖÐ¶ÏÖØÐÂÖÃÁã
  if((Tc>Imin)&&(Tc<Imax))
       { 
         m=0;
@@ -126,6 +93,22 @@ void send_char(unsigned char c)
          if(Im[2]==~Im[3]) 
       {
            IrOK=1; 
+					if(stage_flag==0)
+					{
+							if(Im[2]==0x16)
+							{
+								stage_flag=1;
+							}
+
+					}
+					else if(stage_flag==2)
+					{
+						  if(Im[2]==0x18)
+							{
+								stage_flag=3;
+							}
+					}
+					
    }
         else IrOK=0;   //È¡ÂëÍê³ÉºóÅÐ¶Ï¶ÁÂëÊÇ·ñÕýÈ·
      }
@@ -211,57 +194,376 @@ void rsint() interrupt 4 using 0
 }
 
 
+/************************************************************************/
+//ÊýÂë¹ÜÏÔÊ¾
+/************************************************************************/
+unsigned char const discode[] ={ 0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xBF,0xff/*-*/};
+unsigned char const positon[4]={ 0xfe,0xfd,0xfb,0xf7};
+unsigned char disbuff[4]	   ={ 0,0,0,0,};
 
-	void main(void)
-{
-		TMOD=0x21;  
-    TH1=0xFd;  		   //11.0592M??????9600??????
-    TL1=0xFd;
-    SCON=0x50;  
-		//TMOD &=~0x11;
-		PCON=0x00;
-		//PCON |=0x80;
-    TR1=1;
-		ES=1;  
-		TI=0;
-		RI=0;
-    EA=1;  
-	
-	  IT1=1;
-    EX1=1;
+/********************************************************/
+unsigned char posit=0;
+    void Display_time(void)				 //ÊýÂë¹ÜÉ¨Ãè
+	{
+	 P0=(discode[disbuff[posit]]);
+		  if(posit==0)
+	 { P2_0=0,P2_1=1;P2_2=1;P2_3=1;}
+	  if(posit==1)
+	 { P2_0=1,P2_1=0;P2_2=1;P2_3=1;}
+	  if(posit==2)
+	 { P2_0=1,P2_1=1;P2_2=0;P2_3=1;}
+		if(posit==3)
+	 { P2_0=1,P2_1=1;P2_2=1;P2_3=0;}
+		
+	 //P2=positon[posit];
+	  if(++posit>=4)
+	  posit=0;
+	}
+
+
+
+/************************************************************************/
+//¶æ»ú
+/************************************************************************/
+	#define Sevro_moto_pwm     P2_7	   //½Ó¶æ»úÐÅºÅ¶ËÊäÈëPWMÐÅºÅµ÷½ÚËÙ¶È
+  unsigned char pwm_val_left  = 0;//±äÁ¿¶¨Òå
+	unsigned char push_val_left =14;//¶æ»ú¹éÖÐ£¬²úÉúÔ¼£¬1.5MS ÐÅº
+    unsigned int S=0;
+	unsigned int S1=0;
+	unsigned int S2=0;
+	unsigned int S3=0;
+	unsigned int S4=0;
+	unsigned int  time=0;		    //Ê±¼ä±äÁ¿
+	unsigned int  timer=0;			//ÑÓÊ±»ù×¼±äÁ¿
+	unsigned char timer1=0;			//É¨ÃèÊ±¼ä±äÁ¿	
+
+
+/************************************************************************/
+/*                    PWMµ÷ÖÆµç»ú×ªËÙ                                   */
+/************************************************************************/
+/*                    ×óµç»úµ÷ËÙ                                        */
+/*µ÷½Úpush_val_leftµÄÖµ¸Ä±äµç»ú×ªËÙ,Õ¼¿Õ±È            */
+		void pwm_Servomoto(void)
+{  
  
-  //  TMOD|=0x11;  
-    TH0=0;
-		TL0=0;
-    TR0=1;
-		EA=1;
-		Im[4]='\0';
-
-	while(1)							/*ÎÞÏÞÑ­»·*/
-	{ 
-
-	    if(IrOK==1) 
-     { 
-			 send_char(Im[2]);
-//            	switch(Im[2])
-//    		{
-//      case 0x18:  run(); 			     //Ç°½ø
-//              break;
-//      case 0x52:  backrun();  			 //ºóÍË	 
-//              break;
-//      case 0x5a:  leftrun(); 			 //×ó×ª
-//              break;
-// 	 case 0x08:  rightrun(); 			 //ÓÒ×ª
-//              break;
-// 	 case 0x1C:  stoprun();			 //Í£Ö¹
-//              break;
-// 	 default:break;
-
-   	//	}
-
-           IrOK=0;
-     }
-	 
-					 
-	 }
+    if(pwm_val_left<=push_val_left)
+	       Sevro_moto_pwm=1; 
+	else 
+	       Sevro_moto_pwm=0;
+	if(pwm_val_left>=200)
+	pwm_val_left=0;
+ 
 }
+/************************************************************************/
+//³¬Éù²¨
+/************************************************************************/
+	#define  ECHO  P2_4				   //³¬Éù²¨½Ó¿Ú¶¨Òå
+	#define  TRIG  P2_5				   //³¬Éù²¨½Ó¿Ú¶¨Òå
+
+/************************************************************************/
+     void  StartModule() 		      //Æô¶¯²â¾àÐÅºÅ
+   {
+	  TRIG=1;			                
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_();
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_();
+	  TRIG=0;
+   }
+ /***************************************************/
+
+ /***************************************************/
+	  void Conut(void)		   //¼ÆËã¾àÀë
+	{
+		TH0=0;
+		TL0=0;
+	  while(!ECHO);		       //µ±RXÎªÁãÊ±µÈ´ý
+	  TR0=1;			       //¿ªÆô¼ÆÊý
+	  while(ECHO);			   //µ±RXÎª1¼ÆÊý²¢µÈ´ý
+	  TR0=0;				   //¹Ø±Õ¼ÆÊý
+	  time=TH0*256+TL0;		   //¶ÁÈ¡Âö¿í³¤¶È
+	  TH0=0;
+	  TL0=0;
+	  S=(time*1.7)/100;        //Ëã³öÀ´ÊÇCM
+	  //disbuff[0]=S%1000/100;   //¸üÐÂÏÔÊ¾
+	 // disbuff[1]=S%1000%100/10;
+	  //disbuff[2]=S%1000%10 %10;
+	}
+/************************************************************************/
+
+/***************************************************/
+	 void Display_length(void)				  //É¨ÃèÊýÂë¹Ü
+	{
+	 if(posit==0)
+	 {P0=(discode[disbuff[posit]])&0x7f;}//²úÉúµã
+	 else
+	 {P0=discode[disbuff[posit]];}
+
+	  if(posit==0)
+	 { P2_1=0;P2_2=1;P2_3=1;}
+	  if(posit==1)
+	  {P2_1=1;P2_2=0;P2_3=1;}
+	  if(posit==2)
+	  {P2_1=1;P2_2=1;P2_3=0;}
+	  if(++posit>=3)
+	  posit=0;
+	}
+	
+
+
+ unsigned int timer_int_count=0;
+ unsigned char work_time=3;
+	
+	
+	
+	//¶¨Ê±Æ÷1ÖÐ¶Ï
+ 	void time1()interrupt 3   using 2
+{	
+   TH1=(65536-100)/256;	  //100US¶¨Ê±
+	 TL1=(65536-100)%256;
+	 timer++;				  //¶¨Ê±Æ÷100USÎª×¼¡£ÔÚÕâ¸ö»ù´¡ÉÏÑÓÊ±
+	 pwm_val_left++;
+	 pwm_Servomoto();
+
+	 timer1++;				 //2MSÉ¨Ò»´ÎÊýÂë¹Ü
+	 if(timer1>=20)
+	 {
+	 timer1=0;
+	 Display_time();
+	timer_int_count++;
+	if(timer_int_count==500)
+	 {
+		 timer_int_count=0;
+		 if(work_time==0)
+				//work_time=20;
+				stage_flag++;
+		 work_time--;
+		 disbuff[2]=work_time/10;
+		 disbuff[3]=work_time%10;
+	 }		 
+	 }
+
+
+ }
+/***************************************************/
+ unsigned int timer0_count=0;
+
+ 	void timer0()interrupt 1   using 0
+{	
+	
+	TH0=0xf8;
+	TL0=0x30;
+	timer0_count++; 
+ }
+
+ /***************************************************/
+/************************************************************************/
+ void  COMM( void ) 	//·½Ïòº¯Êý	      
+  {
+  	     
+		 
+		  push_val_left=9;	  //¶æ»úÏò×ó×ª90¶È
+		  timer=0;
+		  while(timer<=2000); //ÑÓÊ±400MSÈÃ¶æ»ú×ªµ½ÆäÎ»ÖÃ		 4000
+		  StartModule();	  //Æô¶¯³¬Éù²¨²â¾à
+          Conut();	 		  //¼ÆËã¾àÀë
+		  S2=S;  
+  
+		  push_val_left=19;	  //¶æ»úÏòÓÒ×ª90¶È
+		  timer=0;
+		  while(timer<=2000); //ÑÓÊ±400MSÈÃ¶æ»ú×ªµ½ÆäÎ»ÖÃ
+		  StartModule();	  //Æô¶¯³¬Éù²¨²â¾à
+          Conut();			  //¼ÆËã¾àÀë
+		  S4=S; 	
+	
+
+		  push_val_left=14;	  //¶æ»ú¹éÖÐ
+		  timer=0;
+		  while(timer<=2000); //ÑÓÊ±400MSÈÃ¶æ»ú×ªµ½ÆäÎ»ÖÃ
+
+		  StartModule();	  //Æô¶¯³¬Éù²¨²â¾à
+          Conut();			  //¼ÆËã¾àÀë
+		  S1=S; 	
+
+          if((S2<40)||(S4<40)) //Ö»Òª×óÓÒ¸÷ÓÐ¾àÀëÐ¡ÓÚ£¬20CMÐ¡³µºóÍË
+		  {
+		  backrun();		   //ºóÍË
+		  timer=0;
+		  while(timer<=1000);
+		  }
+		   
+		  if(S2>S4)		 
+		     {
+				rightrun();  	//³µµÄ×ó±ß±È³µµÄÓÒ±ß¾àÀëÐ¡	ÓÒ×ª	
+		        timer=0;
+		        while(timer<=1000);
+		     }				      
+		       else
+		     {
+		       leftrun();		//³µµÄ×ó±ß±È³µµÄÓÒ±ß¾àÀë´ó	×ó×ª
+		       timer=0;
+		       while(timer<=1000);
+		     }
+		  			   
+
+}
+
+
+
+
+
+void length_count(void)
+{
+	EX1=0;
+	TH1=0;
+	TL1=0;
+	while(!ECHO);		       //µ±RXÎªÁãÊ±µÈ´ý
+	TR1=1;
+	while(ECHO);			   //µ±RXÎª1¼ÆÊý²¢µÈ´ý
+	TR1=0;				   //¹Ø±Õ¼ÆÊý
+	time=TH1*256+TL1;		   //¶ÁÈ¡Âö¿í³¤¶È
+  S=(time*1.7)/100;        //Ëã³öÀ´ÊÇCM
+	TH1=0;
+	TL1=0;
+	m=0;
+	f=0;
+	EX1=1;
+	TR1=1;
+}
+
+
+
+
+
+
+void main(void){
+//ÏµÍ³´¦ÓÚºìÍâ½ÓÊÜ×´Ì¬£¬µÈ´ý½ÓÊÕÒ£¿ØÐÅºÅÆô¶¯¹¤×÷
+	//ÐèÒªÓÃµ½µÄ¹¦ÄÜÓÐ£ººìÍâ½ÓÊÜ½âÂë,Íâ²¿ÖÐ¶Ï1ºÍ¼ÆÊýÆ÷1
+	TMOD=0x10;//ÉèÖÃ¶¨Ê±Æ÷1Îª16bitÄ£Ê½
+
+	IT1=1;//ÉèÖÃÍâ²¿ÖÐ¶Ï1Îª±ßÑØ´¥·¢
+	EX1=1;//ÔÊÐíÍâ²¿ÖÐ¶Ï1ÖÐ¶Ï
+	EA=1;//¿ªÆô×ÜÖÐ¶Ï
+	TR1=1;//Æô¶¯¶¨Ê±Æ÷1
+	while(!stage_flag);
+	EA=0;//¹Ø±Õ×ÜÖÐ¶Ï
+	EX1=0;//½ûÖ¹Íâ²¿ÖÐ¶Ï1
+	TR1=0;//¹Ø±Õ¶¨Ê±Æ÷1
+	
+//ÏµÍ³¿ªÊ¼¹¤×÷£¬³¬Éù²¨´ò¿ª±ÜÕÏ£¬²¢µ¹¼ÆÊ±1·ÖÖÓ
+	//ÐèÒªÓÃµ½µÄ¹¦ÄÜÓÐ£º³¬Éù²¨±ÜÕÏ£¬ÊýÂë¹ÜÏÔÊ¾
+//
+	TMOD=0x11;//ÉèÖÃ¶¨Ê±Æ÷0ºÍ¶¨Ê±Æ÷1Îª16bitÄ£Ê½
+	TH1=(65536-100)/256;	  //100US¶¨Ê±
+	TL1=(65536-100)%256;
+	ET1= 1;//ÔÊÐí¶¨Ê±Æ÷1ÖÐ¶Ï
+	EA = 1;//¿ªÆô×ÜÖÐ¶Ï
+	TR1= 1;//Æô¶¯¶¨Ê±Æ÷1
+
+	push_val_left=14;
+	delay(100);
+	while(!(stage_flag==2))		       /*ÎÞÏÞÑ­»·*/
+	{ 
+	 if(timer>=500)	  //100MS¼ì²âÆô¶¯¼ì²âÒ»´Î	 1000
+	   {
+	       timer=0;
+		   StartModule(); //Æô¶¯¼ì²â
+           Conut();		  //¼ÆËã¾àÀë
+           if(S<20)		  //¾àÀëÐ¡ÓÚ20CM
+		   {
+		   stoprun();	  //Ð¡³µÍ£Ö¹
+		   COMM(); 		  //·½Ïòº¯Êý
+		   }
+		   else
+		   if(S>40)		  //¾àÀë´óÓÚ£¬30CMÍùÇ°×ß
+		   run();
+	   }
+
+	}
+		stoprun();
+	 {P2_1=1;P2_2=1;P2_3=1;}
+	push_val_left=14;
+	delay(100);
+	ET1= 0;//¹Ø±Õ¶¨Ê±Æ÷1ÖÐ¶Ï
+	EA=0;//¹Ø±Õ×ÜÖÐ¶Ï
+	TR1=0;//Í£Ö¹¶¨Ê±Æ÷1
+
+		
+//µ¹¼ÆÊ±½áÊø£¬Ð¡³µ´ò¿ª¿ªÊ¼Ñ°ÕÒ³äµçµã·µ»Ø³äµç
+	//ÐèÒªÓÃµ½µÄ¹¦ÄÜÓÐ£º³¬Éù²â¾à£¬ºìÍâ½ÓÊÜ
+	//Íâ²¿ÖÐ¶Ï1 ºÍ¶¨Ê±Æ÷1 ¶¨Ê±Æ÷0 Íâ²¿ÖÐ¶Ï1ÓÃÀ´¼ì²âºìÍâÐÅºÅ£¬¶¨Ê±Æ÷1ÓÃÀ´¼ÇÂ¼³¬Éù²¨µÄÊ±³¤ ¶¨Ê±Æ÷0ÓÃÀ´¹Ì¶¨¶¨Ê±
+	//Íâ²¿ÖÐ¶Ï1ÖÐ¶ÏÐòºÅ2   ¶¨Ê±Æ÷1¶ÔÓ¦ÖÐ¶ÏÐòºÅ3 ¶¨Ê±Æ÷0¶ÔÓ¦ÖÐ¶ÏÐòºÅ1
+	
+	TMOD=0x11;//ÉèÖÃ¶¨Ê±Æ÷0ºÍ1Îª16bit¶¨Ê±Ä£Ê½
+	TH1=0;
+	TL1=0;
+	IT1=1;//ÉèÖÃÍâ²¿ÖÐ¶Ï1Îª±ßÑØ´¥·¢
+	EX1=1;//ÔÊÐíÍâ²¿ÖÐ¶Ï1ÖÐ¶Ï
+	TH0=0;
+	TL0=0;
+	Im[4]='\0';
+	EA = 1;//¿ªÆô×ÜÖÐ¶Ï
+	TR1=1;//Æô¶¯¶¨Ê±Æ÷1
+	//TR0=1;//Æô¶¯¶¨Ê±Æ÷0
+
+
+while(!(stage_flag==3))
+	{
+		rightrun();
+		delay(100);
+		stoprun();
+		delay(300);
+}
+	stoprun();
+	EX1=0;
+	TR1=0;
+	TR0=0;
+	while(S>20)
+	{
+		run();
+		delay(100);
+		stoprun();
+		StartModule();	  //Æô¶¯³¬Éù²¨²â¾à
+    Conut();			  //¼ÆËã¾àÀë
+		delay(100);
+	}
+	stoprun();
+	
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
