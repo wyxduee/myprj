@@ -6,7 +6,7 @@
 
 unsigned char receive_buff[5];
 unsigned char stage_flag=0;
-
+ unsigned char work_time=10;
 void delay(unsigned int x){
 	unsigned char i;
 	while(x--){
@@ -66,9 +66,9 @@ void send_char(unsigned char c)
 //外部中断1解码程序
   void intersvr1(void) interrupt 2 using 1 //外部中断1
 {
-    Tc=TH1*256+TL1;                                               //提取中断时间间隔时长
-    TH1=0; 
-    TL1=0;              //定时中断重新置零
+    Tc=TH0*256+TL0;                                               //提取中断时间间隔时长
+    TH0=0; 
+    TL0=0;              //定时中断重新置零
  if((Tc>Imin)&&(Tc<Imax))
       { 
         m=0;
@@ -97,15 +97,31 @@ void send_char(unsigned char c)
 					{
 							if(Im[2]==0x16)
 							{
-								stage_flag=1;
+								stage_flag=1;//1
+							}
+					}
+					else if(stage_flag==1)
+					{
+							if(Im[2]==0x18)
+							{
+									work_time++;
+							}
+							else if(Im[2]==0x52)
+								{
+									if(work_time>1)
+										work_time--;
+										
+								}
+										
+								else if(Im[2]==0x1C)
+											stage_flag=2;
 							}
 
-					}
-					else if(stage_flag==2)
+					else if(stage_flag==3)//
 					{
-						  if(Im[2]==0x18)
+						  if(Im[2]==0x0C)
 							{
-								stage_flag=3;
+								stage_flag=4;//
 							}
 					}
 					
@@ -329,7 +345,7 @@ unsigned char posit=0;
 
 
  unsigned int timer_int_count=0;
- unsigned char work_time=3;
+
 	
 	
 	
@@ -352,9 +368,13 @@ unsigned char posit=0;
 	 {
 		 timer_int_count=0;
 		 if(work_time==0)
+		 {
 				//work_time=20;
 				stage_flag++;
-		 work_time--;
+			 return;
+		 }
+		 if(stage_flag==2)
+				work_time--;
 		 disbuff[2]=work_time/10;
 		 disbuff[3]=work_time%10;
 	 }		 
@@ -456,30 +476,33 @@ void length_count(void)
 void main(void){
 //系统处于红外接受状态，等待接收遥控信号启动工作
 	//需要用到的功能有：红外接受解码,外部中断1和计数器1
-	TMOD=0x10;//设置定时器1为16bit模式
+	TMOD=0x01;//设置定时器1为16bit模式
 
 	IT1=1;//设置外部中断1为边沿触发
 	EX1=1;//允许外部中断1中断
 	EA=1;//开启总中断
-	TR1=1;//启动定时器1
-	while(!stage_flag);
+	TR0=1;//启动定时器1
+	P2_6=0;
+	while(stage_flag==0);
 	EA=0;//关闭总中断
 	EX1=0;//禁止外部中断1
-	TR1=0;//关闭定时器1
-	
+	TR0=0;//关闭定时器1
+	P2_6=1;
 //系统开始工作，超声波打开避障，并倒计时1分钟
 	//需要用到的功能有：超声波避障，数码管显示
 //
 	TMOD=0x11;//设置定时器0和定时器1为16bit模式
 	TH1=(65536-100)/256;	  //100US定时
 	TL1=(65536-100)%256;
+	EX1=1;
 	ET1= 1;//允许定时器1中断
 	EA = 1;//开启总中断
 	TR1= 1;//启动定时器1
-
+	TR0=1;
 	push_val_left=14;
 	delay(100);
-	while(!(stage_flag==2))		       /*无限循环*/
+	while(stage_flag==1);
+	while(stage_flag==2)		       /*无限循环*/
 	{ 
 	 if(timer>=500)	  //100MS检测启动检测一次	 1000
 	   {
@@ -504,7 +527,7 @@ void main(void){
 	ET1= 0;//关闭定时器1中断
 	EA=0;//关闭总中断
 	TR1=0;//停止定时器1
-
+	P2_6=0;
 		
 //倒计时结束，小车打开开始寻找充电点返回充电
 	//需要用到的功能有：超声测距，红外接受
@@ -524,10 +547,10 @@ void main(void){
 	//TR0=1;//启动定时器0
 
 
-while(!(stage_flag==3))
+while(stage_flag==3)
 	{
 		rightrun();
-		delay(100);
+		delay(50);
 		stoprun();
 		delay(300);
 }
@@ -553,7 +576,103 @@ while(!(stage_flag==3))
 
 
 
+// void main(void){
+// //系统处于红外接受状态，等待接收遥控信号启动工作
+// 	//需要用到的功能有：红外接受解码,外部中断1和计数器1
+// 	TMOD=0x10;//设置定时器1为16bit模式
 
+// 	IT1=1;//设置外部中断1为边沿触发
+// 	EX1=1;//允许外部中断1中断
+// 	EA=1;//开启总中断
+// 	TR1=1;//启动定时器1
+// 	P2_6=0;
+// 	while(stage_flag==0);
+// 	EA=0;//关闭总中断
+// 	EX1=0;//禁止外部中断1
+// 	TR1=0;//关闭定时器1
+// 	P2_6=1;
+// //系统开始工作，超声波打开避障，并倒计时1分钟
+// 	//需要用到的功能有：超声波避障，数码管显示
+// //
+// 	TMOD=0x11;//设置定时器0和定时器1为16bit模式
+// 	TH1=(65536-100)/256;	  //100US定时
+// 	TL1=(65536-100)%256;
+// 	ET1= 1;//允许定时器1中断
+// 	EA = 1;//开启总中断
+// 	TR1= 1;//启动定时器1
+
+// 	push_val_left=14;
+// 	delay(100);
+// 	while(stage_flag==1);
+// 	while(stage_flag==2)		       /*无限循环*/
+// 	{ 
+// 	 if(timer>=500)	  //100MS检测启动检测一次	 1000
+// 	   {
+// 	       timer=0;
+// 		   StartModule(); //启动检测
+//            Conut();		  //计算距离
+//            if(S<20)		  //距离小于20CM
+// 		   {
+// 		   stoprun();	  //小车停止
+// 		   COMM(); 		  //方向函数
+// 		   }
+// 		   else
+// 		   if(S>40)		  //距离大于，30CM往前走
+// 		   run();
+// 	   }
+
+// 	}
+// 		stoprun();
+// 	 {P2_1=1;P2_2=1;P2_3=1;}
+// 	push_val_left=14;
+// 	delay(100);
+// 	ET1= 0;//关闭定时器1中断
+// 	EA=0;//关闭总中断
+// 	TR1=0;//停止定时器1
+// 	P2_6=0;
+// 		
+// //倒计时结束，小车打开开始寻找充电点返回充电
+// 	//需要用到的功能有：超声测距，红外接受
+// 	//外部中断1 和定时器1 定时器0 外部中断1用来检测红外信号，定时器1用来记录超声波的时长 定时器0用来固定定时
+// 	//外部中断1中断序号2   定时器1对应中断序号3 定时器0对应中断序号1
+// 	
+// 	TMOD=0x11;//设置定时器0和1为16bit定时模式
+// 	TH1=0;
+// 	TL1=0;
+// 	IT1=1;//设置外部中断1为边沿触发
+// 	EX1=1;//允许外部中断1中断
+// 	TH0=0;
+// 	TL0=0;
+// 	Im[4]='\0';
+// 	EA = 1;//开启总中断
+// 	TR1=1;//启动定时器1
+// 	//TR0=1;//启动定时器0
+
+
+// while(stage_flag==3)
+// 	{
+// 		rightrun();
+// 		delay(50);
+// 		stoprun();
+// 		delay(300);
+// }
+// 	stoprun();
+// 	EX1=0;
+// 	TR1=0;
+// 	TR0=0;
+// 	while(S>20)
+// 	{
+// 		run();
+// 		delay(100);
+// 		stoprun();
+// 		StartModule();	  //启动超声波测距
+//     Conut();			  //计算距离
+// 		delay(100);
+// 	}
+// 	stoprun();
+// 	
+
+// }
 
 
 
